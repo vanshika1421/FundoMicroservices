@@ -1,0 +1,22 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: user-migrate
+  namespace: apps
+spec:
+  backoffLimit: 8
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: fundoo-user-migrator:1.0.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ConnectionStrings__UserDb
+              valueFrom:
+                secretKeyRef: { name: fundoo-secrets, key: user-db }
+            - name: Jwt__SigningKey
+              valueFrom:
+                secretKeyRef: { name: fundoo-secrets, key: jwt-signing-key }

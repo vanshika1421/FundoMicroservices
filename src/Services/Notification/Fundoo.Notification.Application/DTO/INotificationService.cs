@@ -1,7 +1,4 @@
-﻿
-using Fundoo.Notification.Application.DTO;
-
-namespace Fundoo.Notification.Application.Abstractions
+﻿namespace Fundoo.Notification.Application.DTO
 {
     public interface INotificationService
     {

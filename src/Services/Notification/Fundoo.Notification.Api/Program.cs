@@ -1,9 +1,11 @@
 using Fundoo.Notification.Api.Services;
-using Fundoo.Notification.Application.Abstractions;
 using Microsoft.Extensions.Options;
 using FluentValidation;
 using Fundoo.Notification.Api.Validation;
 using Fundoo.Notification.Api.Services.Messaging;
+using Fundoo.Notification.Application.DTO;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,6 +20,8 @@ builder.Services.AddValidatorsFromAssemblyContaining<PasswordResetNotificationRe
 
 // Register Swagger/OpenAPI
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddHealthChecks()
+    .AddCheck("notification-api", () => HealthCheckResult.Healthy(), tags: new[] { "live", "ready" });
 builder.Services.AddSingleton<SmtpBulkhead>();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -39,11 +43,7 @@ builder.Services.AddHostedService<NoteEventsConsumer>();
 var app = builder.Build();
 
 // Configure Swagger
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+app.UseSwagger();
 
 // The User API calls the local Notification API over HTTP during development.
 // Keep HTTPS redirection for deployed environments, where certificates are configured.
@@ -56,5 +56,13 @@ app.UseAuthorization();
 
 // Map controller routes
 app.MapControllers();
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("live")
+});
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+});
 
 app.Run();

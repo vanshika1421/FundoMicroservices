@@ -1,5 +1,4 @@
-﻿using Fundoo.Notification.Application.Abstractions;
-using Fundoo.Notification.Application.DTO;
+﻿using Fundoo.Notification.Application.DTO;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Fundoo.Notification.Api.Controllers

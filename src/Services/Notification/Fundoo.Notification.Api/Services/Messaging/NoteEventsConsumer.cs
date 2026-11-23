@@ -1,6 +1,5 @@
 using Confluent.Kafka;
 using Fundoo.EventContracts.Events;
-using Fundoo.Notification.Application.Abstractions;
 using Fundoo.Notification.Application.DTO;
 using System.Text.Json;
 
@@ -53,7 +52,17 @@ public sealed class NoteEventsConsumer(
                 var noteEvent = JsonSerializer.Deserialize<NoteEvent>(
                     result.Message.Value,
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                if (noteEvent is null || string.IsNullOrWhiteSpace(noteEvent.RecipientEmail))
+                var expectedEventType = result.Topic == configuration["Kafka:Topics:NoteCreated"]
+                    ? "notes.created.v1"
+                    : "notes.updated.v1";
+                if (noteEvent is null ||
+                    noteEvent.EventId == Guid.Empty ||
+                    noteEvent.NoteId == Guid.Empty ||
+                    noteEvent.UserId == Guid.Empty ||
+                    noteEvent.Version != 1 ||
+                    !string.Equals(noteEvent.EventType, expectedEventType, StringComparison.Ordinal) ||
+                    string.IsNullOrWhiteSpace(noteEvent.RecipientEmail) ||
+                    string.IsNullOrWhiteSpace(noteEvent.Title))
                     throw new InvalidDataException("Note event is missing required data.");
 
                 using var scope = scopeFactory.CreateScope();

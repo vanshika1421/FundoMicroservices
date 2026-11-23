@@ -1,6 +1,27 @@
 {
   "Routes": [
     {
+      "UpstreamPathTemplate": "/swagger/user/swagger.json",
+      "UpstreamHttpMethod": [ "GET" ],
+      "DownstreamPathTemplate": "/swagger/v1/swagger.json",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "user-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/swagger/notes/swagger.json",
+      "UpstreamHttpMethod": [ "GET" ],
+      "DownstreamPathTemplate": "/swagger/v1/swagger.json",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "notes-service", "Port": 8080 } ]
+    },
+    {
+      "UpstreamPathTemplate": "/swagger/notification/swagger.json",
+      "UpstreamHttpMethod": [ "GET" ],
+      "DownstreamPathTemplate": "/swagger/v1/swagger.json",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "notification-service", "Port": 8080 } ]
+    },
+    {
       "Key": "user-auth-route",
       "UpstreamPathTemplate": "/api/auth/{everything}",
       "UpstreamHttpMethod": [
@@ -11,14 +32,13 @@
         "PATCH"
       ],
       "DownstreamPathTemplate": "/api/auth/{everything}",
-      "DownstreamScheme": "https",
+      "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [
         {
-          "Host": "localhost",
-          "Port": 7001
+          "Host": "user-service",
+          "Port": 8080
         }
       ]
-      
     },
     {
       "Key": "notes-get-route",
@@ -29,13 +49,15 @@
         "Timeout": 30000
       },
       "UpstreamPathTemplate": "/api/notes/{everything}",
-      "UpstreamHttpMethod": [ "GET" ],
+      "UpstreamHttpMethod": [
+        "GET"
+      ],
       "DownstreamPathTemplate": "/api/notes/{everything}",
-      "DownstreamScheme": "https",
+      "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [
         {
-          "Host": "localhost",
-          "Port": 7002
+          "Host": "notes-service",
+          "Port": 8080
         }
       ]
     },
@@ -47,18 +69,31 @@
         "PUT",
         "DELETE",
         "PATCH"
-
       ],
       "DownstreamPathTemplate": "/api/notes/{everything}",
-      "DownstreamScheme": "https",
+      "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [
         {
-          "Host": "localhost",
-          "Port": 7002
+          "Host": "notes-service",
+          "Port": 8080
         }
       ]
-
-    
+    },
+    {
+      "Key": "notes-root-route",
+      "UpstreamPathTemplate": "/api/notes",
+      "UpstreamHttpMethod": [ "GET", "POST" ],
+      "DownstreamPathTemplate": "/api/notes",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "notes-service", "Port": 8080 } ]
+    },
+    {
+      "Key": "labels-root-route",
+      "UpstreamPathTemplate": "/api/labels",
+      "UpstreamHttpMethod": [ "GET", "POST" ],
+      "DownstreamPathTemplate": "/api/labels",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [ { "Host": "notes-service", "Port": 8080 } ]
     },
     {
       "Key": "labels-route",
@@ -71,19 +106,13 @@
         "PATCH"
       ],
       "DownstreamPathTemplate": "/api/labels/{everything}",
-      "DownstreamScheme": "https",
+      "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [
         {
-          "Host": "localhost",
-          "Port": 7002
+          "Host": "notes-service",
+          "Port": 8080
         }
       ]
-  
-      
     }
-  ],
-  "GlobalConfiguration": {
-    "BaseUrl": "https://localhost:7000",
-    
-  }
+  ]
 }

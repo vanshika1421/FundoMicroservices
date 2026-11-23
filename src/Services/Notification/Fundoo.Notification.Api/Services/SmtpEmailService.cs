@@ -3,7 +3,6 @@ using Fundoo.Notification.Application.Templates;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using MimeKit;
-using Fundoo.Notification.Application.Abstractions;
 
 namespace Fundoo.Notification.Api.Services;
 

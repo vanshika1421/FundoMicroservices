@@ -10,18 +10,8 @@ namespace Fundoo.User.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<bool>(
-                name: "TwoFactorEnabled",
-                table: "Users",
-                type: "boolean",
-                nullable: false,
-                defaultValue: false);
-
-            migrationBuilder.AddColumn<string>(
-                name: "TwoFactorSecret",
-                table: "Users",
-                type: "text",
-                nullable: true);
+            // These columns are already created by the earlier
+            // 20261112052848_AddExternalLogin migration.
         }
 
         /// <inheritdoc />

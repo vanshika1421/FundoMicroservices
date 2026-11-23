@@ -224,6 +224,14 @@ builder.Services.AddHealthChecks()  // add health checks
 
 var app = builder.Build();
 
+app.UseSwaggerUI(options =>
+{
+    options.SwaggerEndpoint("/swagger/user/swagger.json", "Fundoo User API v1");
+    options.SwaggerEndpoint("/swagger/notes/swagger.json", "Fundoo Notes API v1");
+    options.SwaggerEndpoint("/swagger/notification/swagger.json", "Fundoo Notification API v1");
+    options.RoutePrefix = "swagger";
+});
+
 // Health endpoint in asp .net core
 //app.MapGet("/health", () =>
 //{
@@ -262,18 +270,17 @@ var app = builder.Build();
 // Apply ASP.NET Core rate limiter
 //app.UseRateLimiter();
 
-// Forward requests through Ocelot
-await app.UseOcelot();
-
-app.MapHealthChecks("/health/live", new HealthCheckOptions
+app.UseHealthChecks("/health/live", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("live")
 });
-
-app.MapHealthChecks("/health/ready", new HealthCheckOptions
+app.UseHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("ready")
 });
+
+// Forward requests through Ocelot
+await app.UseOcelot();
 ThreadPool.GetMinThreads(out int minWorkers, out int minIo);
 ThreadPool.GetMaxThreads(out int maxWorkers, out int maxIo);
 

@@ -1,0 +1,153 @@
+name: fundoo-local
+services:
+  postgres:
+    image: postgres:16.16-bookworm
+    environment:
+      POSTGRES_DB: fundoo_users
+      POSTGRES_USER: fundoo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.local}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fundoo -d fundoo_users"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  redis:
+    image: redis:7.4.11-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  kafka:
+    image: confluentinc/cp-kafka:7.8.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    volumes: ["kafka-data:/var/lib/kafka/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:29092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+  user-migrate:
+    image: fundoo-user-migrator:1.0.0
+    build:
+      context: .
+      dockerfile: src/Services/User/Fundoo.User.Api/Dockerfile
+      target: migrator
+    environment:
+      ConnectionStrings__UserDb: Host=postgres;Port=5432;Database=fundoo_users;Username=fundoo;Password=${POSTGRES_PASSWORD}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env.local}
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+  user-service:
+    image: fundoo-user:1.0.0
+    build: { context: ., dockerfile: src/Services/User/Fundoo.User.Api/Dockerfile }
+    environment:
+      ASPNETCORE_HTTP_PORTS: 8080
+      ConnectionStrings__UserDb: Host=postgres;Port=5432;Database=fundoo_users;Username=fundoo;Password=${POSTGRES_PASSWORD}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env.local}
+      Jwt__Issuer: fundoo-user-api
+      Jwt__Audience: fundoo-clients
+      Redis__ConnectionString: redis:6379,abortConnect=false
+      NotificationService__BaseUrl: http://notification-service:8080/
+      Authentication__Google__ClientId: ${GOOGLE_CLIENT_ID:-}
+      Authentication__Google__ClientSecret: ${GOOGLE_CLIENT_SECRET:-}
+    depends_on:
+      user-migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/health/live >/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+  notes-service:
+    image: fundoo-notes:1.0.0
+    build: { context: ., dockerfile: src/Services/Notes/Fundoo.Notes.Api/Dockerfile }
+    environment:
+      ASPNETCORE_HTTP_PORTS: 8080
+      ConnectionStrings__NotesDb: Host=postgres;Port=5432;Database=fundoo_notes;Username=fundoo;Password=${POSTGRES_PASSWORD}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env.local}
+      Jwt__Issuer: fundoo-user-api
+      Jwt__Audience: fundoo-clients
+      Kafka__BootstrapServers: kafka:29092
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/health/live >/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+  notification-service:
+    image: fundoo-notification:1.0.0
+    build: { context: ., dockerfile: src/Services/Notification/Fundoo.Notification.Api/Dockerfile }
+    environment:
+      ASPNETCORE_HTTP_PORTS: 8080
+      Kafka__BootstrapServers: kafka:29092
+      Kafka__ConsumerGroupId: fundoo-notifications-v1
+      Kafka__Topics__NoteCreated: notes.created.v1
+      Kafka__Topics__NoteUpdated: notes.updated.v1
+      Kafka__DeadLetterTopic: notes.events.dead-letter.v1
+      EmailSettings__Host: ${SMTP_HOST:-localhost}
+      EmailSettings__Port: ${SMTP_PORT:-1025}
+      EmailSettings__SenderEmail: ${SMTP_SENDER_EMAIL:-noreply@example.test}
+      EmailSettings__Username: ${SMTP_USERNAME:-}
+      EmailSettings__Password: ${SMTP_PASSWORD:-}
+    depends_on:
+      kafka: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/health/live >/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+  api-gateway:
+    image: fundoo-api-gateway:1.0.0
+    build: { context: ., dockerfile: src/ApiGateway/Fundoo.ApiGateway/Dockerfile }
+    depends_on: [user-service, notes-service, notification-service]
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/health/live >/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+  nginx:
+    image: nginx:1.30.7-alpine
+    entrypoint: ["nginx"]
+    command: ["-g", "daemon off;"]
+    ports: ["127.0.0.1:8080:8080"]
+    user: "101:101"
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=32m"]
+    volumes: ["./nginx/nginx.conf:/etc/nginx/nginx.conf:ro"]
+    depends_on: [api-gateway]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health/live >/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+volumes:
+  postgres-data:
+  kafka-data:
+

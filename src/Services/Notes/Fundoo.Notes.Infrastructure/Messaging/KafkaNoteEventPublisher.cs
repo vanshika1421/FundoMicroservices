@@ -32,7 +32,11 @@ public sealed class KafkaNoteEventPublisher : INoteEventPublisher, IDisposable
         {
             BootstrapServers = bootstrapServers,
             Acks = Acks.All,
-            EnableIdempotence = true
+            EnableIdempotence = true,
+            // Keep a transient broker outage from immediately failing a note request.
+            MessageSendMaxRetries = 10,
+            RetryBackoffMs = 500,
+            MessageTimeoutMs = 120_000
         }).Build();
     }
 
@@ -52,7 +56,13 @@ public sealed class KafkaNoteEventPublisher : INoteEventPublisher, IDisposable
             await _producer.ProduceAsync(topic, new Message<string, string>
             {
                 Key = noteEvent.NoteId.ToString(),
-                Value = JsonSerializer.Serialize(noteEvent)
+                Value = JsonSerializer.Serialize(noteEvent),
+                Headers = new Headers
+                {
+                    { "event-id", System.Text.Encoding.UTF8.GetBytes(noteEvent.EventId.ToString()) },
+                    { "event-type", System.Text.Encoding.UTF8.GetBytes(noteEvent.EventType) },
+                    { "event-version", System.Text.Encoding.UTF8.GetBytes(noteEvent.Version.ToString()) }
+                }
             }, cancellationToken);
         }
         catch (Exception exception)

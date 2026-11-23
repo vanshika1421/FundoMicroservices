@@ -67,3 +67,6 @@ desktop.ini
 *.db
 *.sqlite
 *.sqlite3
+
+!.env.local.example
+!.env.k8s.example
