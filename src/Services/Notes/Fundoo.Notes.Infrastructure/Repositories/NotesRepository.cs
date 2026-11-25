@@ -1,4 +1,4 @@
-﻿using Fundoo.Notes.Application.Interfaces;
+using Fundoo.Notes.Application.Interfaces;
 using Fundoo.Notes.Domain.Entity;
 using Fundoo.Notes.Infrastructure.Data;
 using Npgsql;
@@ -23,10 +23,12 @@ namespace Fundoo.Notes.Application.Repositories
             const string query = """
         SELECT id, user_id, title, content, color,
                is_pinned, is_archived, is_trashed,
-               created_at_utc, updated_at_utc
+               created_at_utc, updated_at_utc, row_version
         FROM notes
         WHERE id = @noteId
-          AND user_id = @userId;
+          AND (user_id = @userId OR EXISTS (
+              SELECT 1 FROM note_collaborators c
+              WHERE c.note_id = notes.id AND c.user_id = @userId));
         """;
 
             await using var connection = _connectionFactory.CreateConnection();
@@ -46,91 +48,113 @@ namespace Fundoo.Notes.Application.Repositories
                 note = MapNote(reader);
             }
 
-            await LoadLabelsAsync(
-                connection,
-                new[] { note },
-                userId,
-                cancellationToken);
+            await LoadLabelsAsync(connection, new[] { note }, cancellationToken);
 
             return note;
         }
 
-        // Get all notes belonging to the user.
-        public async Task<IReadOnlyList<Note>> GetAllAsync(Guid userId,
-            CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyList<NoteLabel>> GetLabelsAsync(Guid noteId, Guid ownerId, CancellationToken cancellationToken = default)
         {
-            const string query = """
-                SELECT id, user_id, title, content, color,
-                       is_pinned, is_archived, is_trashed,
-                       created_at_utc, updated_at_utc
-                FROM notes
-                WHERE user_id = @userId
-                ORDER BY created_at_utc DESC;
-                """;
-
-            return await GetNotesAsync(query, userId, cancellationToken);
+            await using var connection = _connectionFactory.CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            var note = new Note { Id = noteId };
+            await LoadLabelsAsync(connection, new[] { note }, cancellationToken);
+            return note.NoteLabels;
         }
 
-        // Get active notes: neither archived nor trashed.
-        public async Task<IReadOnlyList<Note>> GetActiveAsync(Guid userId,
-            CancellationToken cancellationToken = default)
+        public async Task<NoteAccessSnapshot?> GetAccessSnapshotAsync(Guid noteId, Guid userId, CancellationToken cancellationToken = default)
+        {
+            await using var connection = _connectionFactory.CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            const string sql = "SELECT n.user_id, n.row_version, c.permission FROM notes n LEFT JOIN note_collaborators c ON c.note_id=n.id AND c.user_id=@userId WHERE n.id=@noteId AND (n.user_id=@userId OR c.user_id IS NOT NULL);";
+            await using var command = new NpgsqlCommand(sql, connection);
+            command.Parameters.AddWithValue("noteId", noteId); command.Parameters.AddWithValue("userId", userId);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            if (!await reader.ReadAsync(cancellationToken)) return null;
+            var permission = reader.IsDBNull(2) ? null : (CollaboratorPermission?)reader.GetInt32(2);
+            return new NoteAccessSnapshot(reader.GetGuid(0), reader.GetInt64(1), permission);
+        }
+
+        // Get all notes belonging to the user.
+        public async Task<IReadOnlyList<Note>> GetAllAsync(Guid userId,
+            CancellationToken cancellationToken = default, int page = 1, int pageSize = 50)
         {
             const string query = """
                 SELECT id, user_id, title, content, color,
                        is_pinned, is_archived, is_trashed,
-                       created_at_utc, updated_at_utc
+                       created_at_utc, updated_at_utc, row_version
                 FROM notes
                 WHERE user_id = @userId
+                ORDER BY created_at_utc DESC LIMIT @pageSize OFFSET @offset;
+                """;
+
+            return await GetNotesAsync(query, userId, cancellationToken, page, pageSize);
+        }
+
+        // Get active notes owned by or shared with the user.
+        public async Task<IReadOnlyList<Note>> GetActiveAsync(Guid userId,
+            CancellationToken cancellationToken = default, int page = 1, int pageSize = 50)
+        {
+            const string query = """
+                SELECT id, user_id, title, content, color,
+                       is_pinned, is_archived, is_trashed,
+                       created_at_utc, updated_at_utc, row_version
+                FROM notes
+                WHERE (user_id = @userId OR EXISTS (
+                    SELECT 1 FROM note_collaborators c
+                    WHERE c.note_id = notes.id AND c.user_id = @userId))
                   AND is_archived = FALSE
                   AND is_trashed = FALSE
-                ORDER BY is_pinned DESC, created_at_utc DESC;
+                ORDER BY is_pinned DESC, created_at_utc DESC LIMIT @pageSize OFFSET @offset;
                 """;
 
             return await GetNotesAsync(
-                query, userId, cancellationToken);
+                query, userId, cancellationToken, page, pageSize);
         }
 
         // Get archived notes that are not in trash.
         public async Task<IReadOnlyList<Note>> GetArchivedAsync(Guid userId,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default, int page = 1, int pageSize = 50)
         {
             const string query = """
                 SELECT id, user_id, title, content, color,
                        is_pinned, is_archived, is_trashed,
-                       created_at_utc, updated_at_utc
+                       created_at_utc, updated_at_utc, row_version
                 FROM notes
-                WHERE user_id = @userId
+                WHERE (user_id = @userId OR EXISTS (
+                    SELECT 1 FROM note_collaborators c
+                    WHERE c.note_id = notes.id AND c.user_id = @userId))
                   AND is_archived = TRUE
                   AND is_trashed = FALSE
-                ORDER BY updated_at_utc DESC;
+                ORDER BY updated_at_utc DESC LIMIT @pageSize OFFSET @offset;
                 """;
 
             return await GetNotesAsync(
-                query, userId, cancellationToken);
+                query, userId, cancellationToken, page, pageSize);
         }
 
         // Get trashed notes.
         public async Task<IReadOnlyList<Note>> GetTrashedAsync(Guid userId,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default, int page = 1, int pageSize = 50)
         {
             const string query = """
                 SELECT id, user_id, title, content, color,
                        is_pinned, is_archived, is_trashed,
-                       created_at_utc, updated_at_utc
+                       created_at_utc, updated_at_utc, row_version
                 FROM notes
                 WHERE user_id = @userId
                   AND is_trashed = TRUE
-                ORDER BY updated_at_utc DESC;
+                ORDER BY updated_at_utc DESC LIMIT @pageSize OFFSET @offset;
                 """;
 
-            return await GetNotesAsync(query, userId, cancellationToken);
+            return await GetNotesAsync(query, userId, cancellationToken, page, pageSize);
         }
 
         // Shared asynchronous query execution for note lists.
         private async Task<IReadOnlyList<Note>> GetNotesAsync(
             string query,
             Guid userId,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken, int page, int pageSize)
         {
             var notes = new List<Note>();
 
@@ -139,6 +163,8 @@ namespace Fundoo.Notes.Application.Repositories
 
             await using var command = new NpgsqlCommand(query, connection);
             command.Parameters.AddWithValue("userId", userId);
+            command.Parameters.AddWithValue("pageSize", pageSize);
+            command.Parameters.AddWithValue("offset", (long)(Math.Max(1, page) - 1) * pageSize);
 
             await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
             {
@@ -148,7 +174,7 @@ namespace Fundoo.Notes.Application.Repositories
                 }
             }
 
-            await LoadLabelsAsync(connection, notes, userId, cancellationToken);
+            await LoadLabelsAsync(connection, notes, cancellationToken);
 
             return notes;
         }
@@ -177,6 +203,7 @@ namespace Fundoo.Notes.Application.Repositories
 
             note.CreatedAtUtc = DateTime.UtcNow;
             note.UpdatedAtUtc = note.CreatedAtUtc;
+            note.RowVersion = 1;
 
             await using var connection = _connectionFactory.CreateConnection();
 
@@ -214,9 +241,11 @@ namespace Fundoo.Notes.Application.Repositories
                     is_pinned = @isPinned,
                     is_archived = @isArchived,
                     is_trashed = @isTrashed,
-                    updated_at_utc = @updatedAtUtc
+                    updated_at_utc = @updatedAtUtc,
+                    row_version = row_version + 1
                 WHERE id = @id
-                  AND user_id = @userId;
+                  AND user_id = @userId
+                  AND row_version = @rowVersion;
                 """;
 
             note.UpdatedAtUtc = DateTime.UtcNow;
@@ -238,8 +267,19 @@ namespace Fundoo.Notes.Application.Repositories
             command.Parameters.AddWithValue("isArchived", note.IsArchived);
             command.Parameters.AddWithValue("isTrashed", note.IsTrashed);
             command.Parameters.AddWithValue("updatedAtUtc", note.UpdatedAtUtc);
+            command.Parameters.AddWithValue("rowVersion", note.RowVersion);
 
             int rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
+
+            if (rowsAffected == 0)
+            {
+                const string existsSql = "SELECT EXISTS (SELECT 1 FROM notes WHERE id = @id AND user_id = @userId);";
+                await using var existsCommand = new NpgsqlCommand(existsSql, connection);
+                existsCommand.Parameters.AddWithValue("id", note.Id);
+                existsCommand.Parameters.AddWithValue("userId", note.UserId);
+                if ((bool)(await existsCommand.ExecuteScalarAsync(cancellationToken) ?? false))
+                    throw new Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException("The note was changed by another request.");
+            }
 
             return rowsAffected > 0;
         }
@@ -271,7 +311,6 @@ namespace Fundoo.Notes.Application.Repositories
         private static async Task LoadLabelsAsync(
             NpgsqlConnection connection,
             IEnumerable<Note> notes,
-            Guid userId,
             CancellationToken cancellationToken)
         {
             var noteList = notes.ToList();
@@ -289,10 +328,7 @@ namespace Fundoo.Notes.Application.Repositories
                     l.name AS label_name
                 FROM note_labels nl
                 INNER JOIN labels l ON l.id = nl.label_id
-                INNER JOIN notes n ON n.id = nl.note_id
                 WHERE nl.note_id = ANY(@noteIds)
-                  AND n.user_id = @userId
-                  AND l.user_id = @userId
                 ORDER BY l.name;
                 """;
 
@@ -302,8 +338,6 @@ namespace Fundoo.Notes.Application.Repositories
                 "noteIds",
                 NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Uuid,
                 noteIds);
-
-            command.Parameters.AddWithValue("userId", userId);
 
             await using var reader =
                 await command.ExecuteReaderAsync(cancellationToken);
@@ -365,7 +399,8 @@ namespace Fundoo.Notes.Application.Repositories
 
                 CreatedAtUtc = reader.GetDateTime(reader.GetOrdinal("created_at_utc")),
 
-                UpdatedAtUtc = reader.GetDateTime(reader.GetOrdinal("updated_at_utc"))
+                UpdatedAtUtc = reader.GetDateTime(reader.GetOrdinal("updated_at_utc")),
+                RowVersion = reader.GetInt64(reader.GetOrdinal("row_version"))
             };
         }
     }

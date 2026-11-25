@@ -18,7 +18,9 @@ namespace Fundoo.Notes.Domain.Entity
         public bool IsTrashed { get; set; }
         public DateTime CreatedAtUtc { get; set; }
         public DateTime UpdatedAtUtc { get; set; }
+        public long RowVersion { get; set; }
         public List<NoteLabel> NoteLabels { get; set; } = new();
+        public List<NoteCollaborator> Collaborators { get; set; } = new();
 
     }
 }

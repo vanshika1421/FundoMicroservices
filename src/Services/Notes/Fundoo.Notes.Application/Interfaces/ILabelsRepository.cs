@@ -15,5 +15,6 @@ namespace Fundoo.Notes.Application.Interfaces
         Task<bool> AttachToNoteAsync(Guid noteId, Guid labelId, Guid userId, CancellationToken cancellationToken = default);
 
         Task<bool> DetachFromNoteAsync(Guid noteId, Guid labelId, Guid userId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Guid>> GetLinkedNoteIdsAsync(Guid labelId, Guid userId, CancellationToken cancellationToken = default);
     }
 }

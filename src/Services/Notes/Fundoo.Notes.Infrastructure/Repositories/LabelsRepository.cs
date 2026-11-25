@@ -15,6 +15,20 @@ namespace Fundoo.Notes.Infrastructure.Repositories
             _connectionFactory = connectionFactory;
         }
 
+        public async Task<IReadOnlyList<Guid>> GetLinkedNoteIdsAsync(Guid labelId, Guid userId, CancellationToken cancellationToken = default)
+        {
+            await using var connection = _connectionFactory.CreateConnection();
+            await connection.OpenAsync(cancellationToken);
+            const string sql = "SELECT nl.note_id FROM note_labels nl JOIN notes n ON n.id=nl.note_id WHERE nl.label_id=@labelId AND n.user_id=@userId;";
+            await using var command = new NpgsqlCommand(sql, connection);
+            command.Parameters.AddWithValue("labelId", labelId);
+            command.Parameters.AddWithValue("userId", userId);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            var ids = new List<Guid>();
+            while (await reader.ReadAsync(cancellationToken)) ids.Add(reader.GetGuid(0));
+            return ids;
+        }
+
         public async Task<Label> CreateAsync(Label label,
             CancellationToken cancellationToken = default)
         {

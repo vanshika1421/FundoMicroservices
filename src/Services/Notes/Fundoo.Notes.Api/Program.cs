@@ -8,6 +8,9 @@ using Microsoft.OpenApi.Models;
 using System.Text;
 using FluentValidation;
 using Fundoo.Notes.Api.Validation;
+using Fundoo.Notes.Api.Authorization;
+using Microsoft.AspNetCore.Authorization;
+using Fundoo.Notes.Api.Middleware;
 var builder = WebApplication.CreateBuilder(args);
 
 var notesConnectionString =
@@ -64,6 +67,7 @@ builder.Services
     });
 builder.Services.AddHealthChecks();
 builder.Services.AddAuthorization();
+builder.Services.AddScoped<IAuthorizationHandler, NoteAuthorizationHandler>();
 
 //swagger authorize configuration
 builder.Services.AddSwaggerGen(options =>
@@ -94,7 +98,8 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 var connectionString =
-builder.Configuration.GetConnectionString("NotesDb");
+builder.Configuration.GetConnectionString("NotesDb")
+    ?? throw new InvalidOperationException("NotesDb connection string is missing.");
 builder.Services.AddHealthChecks().AddCheck(
 "self",
 () => HealthCheckResult.Healthy(),
@@ -109,6 +114,7 @@ timeout: TimeSpan.FromSeconds(3)
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+app.UseMiddleware<ApiExceptionMiddleware>();
 app.UseSwagger();
 
 app.UseHttpsRedirection();

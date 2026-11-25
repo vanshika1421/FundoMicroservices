@@ -1,0 +1,225 @@
+//{
+//  "Routes": [
+//    {
+//      "UpstreamPathTemplate": "/swagger/user/swagger.json",
+//      "UpstreamHttpMethod": [ "GET" ],
+//      "DownstreamPathTemplate": "/swagger/v1/swagger.json",
+//      "DownstreamScheme": "http",
+//      "DownstreamHostAndPorts": [ { "Host": "user-service", "Port": 8080 } ]
+//    },
+//    {
+//      "UpstreamPathTemplate": "/swagger/notes/swagger.json",
+//      "UpstreamHttpMethod": [ "GET" ],
+//      "DownstreamPathTemplate": "/swagger/v1/swagger.json",
+//      "DownstreamScheme": "http",
+//      "DownstreamHostAndPorts": [ { "Host": "notes-service", "Port": 8080 } ]
+//    },
+//    {
+//      "UpstreamPathTemplate": "/swagger/notification/swagger.json",
+//      "UpstreamHttpMethod": [ "GET" ],
+//      "DownstreamPathTemplate": "/swagger/v1/swagger.json",
+//      "DownstreamScheme": "http",
+//      "DownstreamHostAndPorts": [ { "Host": "notification-service", "Port": 8080 } ]
+//    },
+//    {
+//      "Key": "user-auth-route",
+//      "UpstreamPathTemplate": "/api/auth/{everything}",
+//      "UpstreamHttpMethod": [
+//        "GET",
+//        "POST",
+//        "PUT",
+//        "DELETE",
+//        "PATCH"
+//      ],
+//      "DownstreamPathTemplate": "/api/auth/{everything}",
+//      "DownstreamScheme": "http",
+//      "DownstreamHostAndPorts": [
+//        {
+//          "Host": "user-service",
+//          "Port": 8080
+//        }
+//      ]
+//    },
+//    {
+//      "Key": "notes-get-route",
+//      "Metadata": {
+//        "EnableRetry": "true"
+//      },
+//      "QoSOptions": {
+//        "Timeout": 30000
+//      },
+//      "UpstreamPathTemplate": "/api/notes/{everything}",
+//      "UpstreamHttpMethod": [
+//        "GET"
+//      ],
+//      "DownstreamPathTemplate": "/api/notes/{everything}",
+//      "DownstreamScheme": "http",
+//      "DownstreamHostAndPorts": [
+//        {
+//          "Host": "notes-service",
+//          "Port": 8080
+//        }
+//      ]
+//    },
+//    {
+//      "Key": "notes-write-route",
+//      "UpstreamPathTemplate": "/api/notes/{everything}",
+//      "UpstreamHttpMethod": [
+//        "POST",
+//        "PUT",
+//        "DELETE",
+//        "PATCH"
+//      ],
+//      "DownstreamPathTemplate": "/api/notes/{everything}",
+//      "DownstreamScheme": "http",
+//      "DownstreamHostAndPorts": [
+//        {
+//          "Host": "notes-service",
+//          "Port": 8080
+//        }
+//      ]
+//    },
+//    {
+//      "Key": "notes-root-route",
+//      "UpstreamPathTemplate": "/api/notes",
+//      "UpstreamHttpMethod": [ "GET", "POST" ],
+//      "DownstreamPathTemplate": "/api/notes",
+//      "DownstreamScheme": "http",
+//      "DownstreamHostAndPorts": [ { "Host": "notes-service", "Port": 8080 } ]
+//    },
+//    {
+//      "Key": "labels-root-route",
+//      "UpstreamPathTemplate": "/api/labels",
+//      "UpstreamHttpMethod": [ "GET", "POST" ],
+//      "DownstreamPathTemplate": "/api/labels",
+//      "DownstreamScheme": "http",
+//      "DownstreamHostAndPorts": [ { "Host": "notes-service", "Port": 8080 } ]
+//    },
+//    {
+//      "Key": "labels-route",
+//      "UpstreamPathTemplate": "/api/labels/{everything}",
+//      "UpstreamHttpMethod": [
+//        "GET",
+//        "POST",
+//        "PUT",
+//        "DELETE",
+//        "PATCH"
+//      ],
+//      "DownstreamPathTemplate": "/api/labels/{everything}",
+//      "DownstreamScheme": "http",
+//      "DownstreamHostAndPorts": [
+//        {
+//          "Host": "notes-service",
+//          "Port": 8080
+//        }
+//      ]
+//    }
+//  ]
+//}
+{
+  "Routes": [
+    {
+      "UpstreamPathTemplate": "/api/auth/{everything}",
+      "UpstreamHttpMethod": [ "Get", "Post", "Put", "Patch", "Delete" ],
+      "DownstreamPathTemplate": "/api/auth/{everything}",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 7001
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/notes",
+      "UpstreamHttpMethod": [ "Get", "Post" ],
+      "DownstreamPathTemplate": "/api/notes",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 7002
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/notes/{everything}",
+      "UpstreamHttpMethod": [ "Get", "Post", "Put", "Patch", "Delete" ],
+      "DownstreamPathTemplate": "/api/notes/{everything}",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 7002
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/labels",
+      "UpstreamHttpMethod": [ "Get", "Post" ],
+      "DownstreamPathTemplate": "/api/labels",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 7002
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/api/labels/{everything}",
+      "UpstreamHttpMethod": [ "Get", "Put", "Patch", "Delete" ],
+      "DownstreamPathTemplate": "/api/labels/{everything}",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 7002
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/swagger/user/swagger.json",
+      "UpstreamHttpMethod": [ "GET" ],
+      "DownstreamPathTemplate": "/swagger/v1/swagger.json",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 7001
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/swagger/notes/swagger.json",
+      "UpstreamHttpMethod": [ "GET" ],
+      "DownstreamPathTemplate": "/swagger/v1/swagger.json",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 7002
+        }
+      ]
+    },
+    {
+      "UpstreamPathTemplate": "/swagger/notification/swagger.json",
+      "UpstreamHttpMethod": [ "GET" ],
+      "DownstreamPathTemplate": "/swagger/v1/swagger.json",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 7003
+        }
+      ]
+    }
+  ],
+
+  "GlobalConfiguration": {
+    "BaseUrl": "https://localhost:7000",
+    "QoSOptions": {
+      "Timeout": 15000
+    }
+  }
+}

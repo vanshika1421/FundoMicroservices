@@ -52,5 +52,6 @@ public sealed class LabelsServiceTests
         public Task<bool> DeleteAsync(Guid labelId, Guid userId, CancellationToken cancellationToken = default) => Task.FromResult(false);
         public Task<bool> AttachToNoteAsync(Guid noteId, Guid labelId, Guid userId, CancellationToken cancellationToken = default) => Task.FromResult(false);
         public Task<bool> DetachFromNoteAsync(Guid noteId, Guid labelId, Guid userId, CancellationToken cancellationToken = default) => Task.FromResult(false);
+        public Task<IReadOnlyList<Guid>> GetLinkedNoteIdsAsync(Guid labelId, Guid userId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<Guid>>([]);
     }
 }

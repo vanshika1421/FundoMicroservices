@@ -2,11 +2,12 @@
 using Fundoo.Notes.Api.Contracts.Requests;
 using Fundoo.Notes.Api.Contracts.Response;
 using Fundoo.Notes.Application.Interfaces;
-using Fundoo.Notes.Domain.Entity;
 using Fundoo.EventContracts.Events;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using Fundoo.Notes.Api.Authorization;
+using Fundoo.Notes.Domain.Entity;
 
 namespace Fundoo.Notes.Api.Controllers
 {
@@ -17,24 +18,30 @@ namespace Fundoo.Notes.Api.Controllers
     {
         private readonly INotesService _notesService;
         private readonly INoteEventPublisher _noteEventPublisher;
+        private readonly INoteCollaboratorsService _collaboratorsService;
+        private readonly IAuthorizationService _authorizationService;
 
         public NotesController(
             INotesService notesService,
-            INoteEventPublisher noteEventPublisher)
+            INoteEventPublisher noteEventPublisher,
+            INoteCollaboratorsService collaboratorsService,
+            IAuthorizationService authorizationService)
         {
             _notesService = notesService;
             _noteEventPublisher = noteEventPublisher;
+            _collaboratorsService = collaboratorsService;
+            _authorizationService = authorizationService;
         }
 
         [HttpGet]
         public async Task<IActionResult> GetActiveNotes(
-            CancellationToken cancellationToken)
+            int page = 1, int pageSize = 50, CancellationToken cancellationToken = default)
         {
             if (!TryGetUserId(out var userId))
                 return Unauthorized(new { message = "Invalid user token." });
 
             var notes = await _notesService.GetActiveAsync(
-                userId, cancellationToken);
+                userId, cancellationToken, page, pageSize);
 
             var response = notes
                 .Select(MapToResponse)
@@ -50,13 +57,13 @@ namespace Fundoo.Notes.Api.Controllers
 
         [HttpGet("archived")]
         public async Task<IActionResult> GetArchivedNotes(
-            CancellationToken cancellationToken)
+            int page = 1, int pageSize = 50, CancellationToken cancellationToken = default)
         {
             if (!TryGetUserId(out var userId))
                 return Unauthorized(new { message = "Invalid user ID in token." });
 
             var notes = await _notesService.GetArchivedAsync(
-                userId, cancellationToken);
+                userId, cancellationToken, page, pageSize);
 
             var response = notes.Select(MapToResponse).ToList();
 
@@ -70,13 +77,13 @@ namespace Fundoo.Notes.Api.Controllers
 
         [HttpGet("trash")]
         public async Task<IActionResult> GetTrashedNotes(
-            CancellationToken cancellationToken)
+            int page = 1, int pageSize = 50, CancellationToken cancellationToken = default)
         {
             if (!TryGetUserId(out var userId))
                 return Unauthorized(new { message = "Invalid user ID in token." });
 
             var notes = await _notesService.GetTrashedAsync(
-                userId, cancellationToken);
+                userId, cancellationToken, page, pageSize);
 
             var response = notes.Select(MapToResponse).ToList();
 
@@ -100,6 +107,8 @@ namespace Fundoo.Notes.Api.Controllers
                 id, userId, cancellationToken);
 
             if (note == null)
+                return NotFound(new { message = "Note not found." });
+            if (!(await _authorizationService.AuthorizeAsync(User, note, new NoteReadRequirement())).Succeeded)
                 return NotFound(new { message = "Note not found." });
 
             return Ok(new
@@ -126,13 +135,14 @@ namespace Fundoo.Notes.Api.Controllers
             var note = new Note
             {
                 UserId = userId,
-                Title = request.Title.Trim(),
-                Content = request.Content,
+                Title = request.Title?.Trim() ?? string.Empty,
+                Content = request.Content ?? string.Empty,
                 Color = request.Color,
                 IsPinned = request.IsPinned,
                 IsArchived = false,
                 IsTrashed = false
             };
+
             var recipientEmail = User.FindFirst(ClaimTypes.Email)?.Value
                 ?? User.FindFirst("email")?.Value;
 
@@ -194,11 +204,16 @@ namespace Fundoo.Notes.Api.Controllers
             {
                 Id = id,
                 UserId = userId,
-                Title = request.Title.Trim(),
-                Content = request.Content,
+                Title = request.Title?.Trim() ?? string.Empty,
+                Content = request.Content ?? string.Empty,
                 Color = request.Color,
                 IsPinned = request.IsPinned
             };
+
+            var current = await _notesService.GetByIdAsync(id, userId, cancellationToken);
+            if (current is null) return NotFound(new { message = "Note not found." });
+            if (!(await _authorizationService.AuthorizeAsync(User, current, new NoteEditRequirement())).Succeeded)
+                return Forbid();
 
             try
             {
@@ -349,6 +364,39 @@ namespace Fundoo.Notes.Api.Controllers
                 isSuccess = true,
                 message = "Note permanently deleted."
             });
+        }
+
+        [HttpGet("{id:guid}/collaborators")]
+        public async Task<IActionResult> GetCollaborators(Guid id, CancellationToken cancellationToken)
+        {
+            if (!TryGetUserId(out var ownerId)) return Unauthorized();
+            var collaborators = await _collaboratorsService.GetAllAsync(id, ownerId, cancellationToken);
+            return Ok(collaborators.Select(c => new { c.UserId, c.Permission, c.CreatedAtUtc }));
+        }
+
+        [HttpPost("{id:guid}/collaborators")]
+        public async Task<IActionResult> AddCollaborator(Guid id, [FromBody] ShareNoteRequest request, CancellationToken cancellationToken)
+        {
+            if (!TryGetUserId(out var ownerId)) return Unauthorized();
+            var added = await _collaboratorsService.AddAsync(id, ownerId, request.UserId, request.Permission, cancellationToken);
+            return added ? StatusCode(StatusCodes.Status201Created) : Conflict(new { message = "Note is not owned by you, user already has access, or the user ID is invalid." });
+        }
+
+        [HttpPut("{id:guid}/collaborators/{userId:guid}")]
+        public async Task<IActionResult> SetCollaboratorPermission(Guid id, Guid userId, [FromBody] ShareNoteRequest request, CancellationToken cancellationToken)
+        {
+            if (!TryGetUserId(out var ownerId)) return Unauthorized();
+            if (request.UserId != Guid.Empty && request.UserId != userId) return BadRequest();
+            var changed = await _collaboratorsService.SetPermissionAsync(id, ownerId, userId, request.Permission, cancellationToken);
+            return changed ? NoContent() : NotFound();
+        }
+
+        [HttpDelete("{id:guid}/collaborators/{userId:guid}")]
+        public async Task<IActionResult> RemoveCollaborator(Guid id, Guid userId, CancellationToken cancellationToken)
+        {
+            if (!TryGetUserId(out var ownerId)) return Unauthorized();
+            var removed = await _collaboratorsService.RemoveAsync(id, ownerId, userId, cancellationToken);
+            return removed ? NoContent() : NotFound();
         }
 
         private bool TryGetUserId(out Guid userId)

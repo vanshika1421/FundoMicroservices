@@ -6,6 +6,7 @@ using Fundoo.Notes.Infrastructure.Repositories;
 using Fundoo.Notes.Infrastructure.Messaging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
 
 namespace Fundoo.Notes.Infrastructure
 {
@@ -16,9 +17,14 @@ namespace Fundoo.Notes.Infrastructure
         {
             // Database connection factory
             services.AddSingleton<NotesDbConnectionFactory>();
+            services.AddDbContext<NotesDbContext>(options => options.UseNpgsql(configuration.GetConnectionString("NotesDb")));
 
             // Note Repository
             services.AddScoped<INotesRepository, NotesRepository>();
+            services.AddScoped<INoteCollaboratorsRepository, NoteCollaboratorsRepository>();
+            services.AddScoped<INoteCollaboratorsService, NoteCollaboratorsService>();
+            services.AddMemoryCache();
+            services.AddSingleton<ICacheService, MemoryCacheService>();
 
             // Application service
             services.AddScoped<INotesService, NotesService>();

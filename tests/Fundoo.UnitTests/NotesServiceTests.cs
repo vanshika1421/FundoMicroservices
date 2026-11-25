@@ -113,13 +113,15 @@ public sealed class NotesServiceTests
 
         public Task<Note?> GetByIdAsync(Guid noteId, Guid userId, CancellationToken cancellationToken = default) =>
             Task.FromResult(Notes.FirstOrDefault(n => n.Id == noteId && n.UserId == userId));
-        public Task<IReadOnlyList<Note>> GetAllAsync(Guid userId, CancellationToken cancellationToken = default) =>
+        public Task<IReadOnlyList<NoteLabel>> GetLabelsAsync(Guid noteId, Guid ownerId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<NoteLabel>>([]);
+        public Task<NoteAccessSnapshot?> GetAccessSnapshotAsync(Guid noteId, Guid userId, CancellationToken cancellationToken = default) => Task.FromResult<NoteAccessSnapshot?>(null);
+        public Task<IReadOnlyList<Note>> GetAllAsync(Guid userId, CancellationToken cancellationToken = default, int page = 1, int pageSize = 50) =>
             Task.FromResult<IReadOnlyList<Note>>(Notes.Where(n => n.UserId == userId).ToList());
-        public Task<IReadOnlyList<Note>> GetActiveAsync(Guid userId, CancellationToken cancellationToken = default) =>
+        public Task<IReadOnlyList<Note>> GetActiveAsync(Guid userId, CancellationToken cancellationToken = default, int page = 1, int pageSize = 50) =>
             Task.FromResult<IReadOnlyList<Note>>(Notes.Where(n => n.UserId == userId && !n.IsArchived && !n.IsTrashed).ToList());
-        public Task<IReadOnlyList<Note>> GetArchivedAsync(Guid userId, CancellationToken cancellationToken = default) =>
+        public Task<IReadOnlyList<Note>> GetArchivedAsync(Guid userId, CancellationToken cancellationToken = default, int page = 1, int pageSize = 50) =>
             Task.FromResult<IReadOnlyList<Note>>(Notes.Where(n => n.UserId == userId && n.IsArchived && !n.IsTrashed).ToList());
-        public Task<IReadOnlyList<Note>> GetTrashedAsync(Guid userId, CancellationToken cancellationToken = default) =>
+        public Task<IReadOnlyList<Note>> GetTrashedAsync(Guid userId, CancellationToken cancellationToken = default, int page = 1, int pageSize = 50) =>
             Task.FromResult<IReadOnlyList<Note>>(Notes.Where(n => n.UserId == userId && n.IsTrashed).ToList());
         public Task<Note> CreateAsync(Note note, CancellationToken cancellationToken = default)
         {
